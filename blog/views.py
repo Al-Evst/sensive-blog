@@ -7,14 +7,7 @@ def get_related_posts_count(tag):
 
 
 def get_likes_count(post):
-    return post.likes.count()
-
-
-def serialize_tag(tag):
-    return {
-        'title': tag.title,
-        'posts_with_tag': len(Post.objects.filter(tags=tag)),
-    }
+    return post.likes.count()  
 
 
 def serialize_post(post):
@@ -22,8 +15,7 @@ def serialize_post(post):
         'title': post.title,
         'teaser_text': post.text[:200],
         'author': post.author.username,
-        'comments_amount': len(Comment.objects.filter(post=post)),
-        'likes_amount': get_likes_count(post),
+        'comments_amount': Comment.objects.filter(post=post).count(),
         'image_url': post.image.url if post.image else None,
         'published_at': post.published_at,
         'slug': post.slug,
@@ -32,20 +24,30 @@ def serialize_post(post):
     }
 
 
+def serialize_tag(tag):
+    return {
+        'title': tag.title,
+        'posts_with_tag': Post.objects.filter(tags=tag).count(),
+    }
+
+
 def index(request):
     all_posts = Post.objects.all()
-    most_popular_posts = sorted(all_posts, key=get_likes_count, reverse=True)[:5]
 
-    fresh_posts = Post.objects.order_by('published_at')
-    most_fresh_posts = list(fresh_posts)[-5:]
+    
+    popular_posts_sorted = sorted(all_posts, key=get_likes_count, reverse=True)
+    most_popular_posts = popular_posts_sorted[:5]
+
+    
+    fresh_posts = Post.objects.order_by('-published_at')[:5]
 
     tags = Tag.objects.all()
-    popular_tags = sorted(tags, key=get_related_posts_count, reverse=True)
-    most_popular_tags = popular_tags[:5]
+    popular_tags_sorted = sorted(tags, key=get_related_posts_count, reverse=True)
+    most_popular_tags = popular_tags_sorted[:5]
 
     context = {
         'most_popular_posts': [serialize_post(post) for post in most_popular_posts],
-        'page_posts': [serialize_post(post) for post in most_fresh_posts],
+        'page_posts': [serialize_post(post) for post in fresh_posts],
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
     }
     return render(request, 'index.html', context)
@@ -54,11 +56,13 @@ def index(request):
 def post_detail(request, slug):
     post = Post.objects.get(slug=slug)
     comments = Comment.objects.filter(post=post)
-    serialized_comments = [{
-        'text': comment.text,
-        'published_at': comment.published_at,
-        'author': comment.author.username,
-    } for comment in comments]
+    serialized_comments = []
+    for comment in comments:
+        serialized_comments.append({
+            'text': comment.text,
+            'published_at': comment.published_at,
+            'author': comment.author.username,
+        })
 
     likes = post.likes.all()
     related_tags = post.tags.all()
@@ -68,7 +72,7 @@ def post_detail(request, slug):
         'text': post.text,
         'author': post.author.username,
         'comments': serialized_comments,
-        'likes_amount': len(likes),
+        'likes_amount': likes.count(),
         'image_url': post.image.url if post.image else None,
         'published_at': post.published_at,
         'slug': post.slug,
@@ -76,11 +80,12 @@ def post_detail(request, slug):
     }
 
     all_tags = Tag.objects.all()
-    popular_tags = sorted(all_tags, key=get_related_posts_count, reverse=True)
-    most_popular_tags = popular_tags[:5]
+    popular_tags_sorted = sorted(all_tags, key=get_related_posts_count, reverse=True)
+    most_popular_tags = popular_tags_sorted[:5]
 
     all_posts = Post.objects.all()
-    most_popular_posts = sorted(all_posts, key=get_likes_count, reverse=True)[:5]
+    popular_posts_sorted = sorted(all_posts, key=get_likes_count, reverse=True)
+    most_popular_posts = popular_posts_sorted[:5]
 
     context = {
         'post': serialized_post,
@@ -94,11 +99,12 @@ def tag_filter(request, tag_title):
     tag = Tag.objects.get(title=tag_title)
 
     all_tags = Tag.objects.all()
-    popular_tags = sorted(all_tags, key=get_related_posts_count, reverse=True)
-    most_popular_tags = popular_tags[:5]
+    popular_tags_sorted = sorted(all_tags, key=get_related_posts_count, reverse=True)
+    most_popular_tags = popular_tags_sorted[:5]
 
     all_posts = Post.objects.all()
-    most_popular_posts = sorted(all_posts, key=get_likes_count, reverse=True)[:5]
+    popular_posts_sorted = sorted(all_posts, key=get_likes_count, reverse=True)
+    most_popular_posts = popular_posts_sorted[:5]
 
     related_posts = tag.posts.all()[:20]
 
