@@ -22,6 +22,18 @@ def serialize_post(post):
         'first_tag_title': post.tags.all()[0].title,
     }
 
+def serialize_post_optimized(post):
+    return {
+        'title': post.title,
+        'teaser_text': post.text[:200],
+        'author': post.author.username,
+        'comments_amount': len(Comment.objects.filter(post=post)),
+        'image_url': post.image.url if post.image else None,
+        'published_at': post.published_at,
+        'slug': post.slug,
+        'tags': [serialize_tag(tag) for tag in post.tags.all()],
+        'first_tag_title': post.tags.all()[0].title,
+    }
 
 def serialize_tag(tag):
     return {
@@ -31,26 +43,28 @@ def serialize_tag(tag):
 
 
 def index(request):
-    # Аннотируем количество лайков сразу
-    posts_with_likes = Post.objects.annotate(likes_count=Count('likes'))
+    posts_with_likes = (
+        Post.objects
+        .annotate(likes_count=Count('likes'))
+        .select_related('author')  # подгружаем автора одним JOIN
+        .order_by('-likes_count')[:5]
+    )
 
-    # Сортируем по количеству лайков и берём топ-5
-    most_popular_posts = posts_with_likes.order_by('-likes_count')[:5]
+    fresh_posts = (
+        Post.objects
+        .select_related('author')  
+        .order_by('-published_at')[:5]
+    )
 
-    # Свежие посты по дате публикации
-    fresh_posts = Post.objects.order_by('-published_at')[:5]
-
-    # Теги (если get_related_posts_count можно заменить, то лучше тоже через annotate)
     tags = Tag.objects.annotate(posts_count=Count('posts'))
     most_popular_tags = tags.order_by('-posts_count')[:5]
 
     context = {
-        'most_popular_posts': [serialize_post(post) for post in most_popular_posts],
+        'most_popular_posts': [serialize_post(post) for post in posts_with_likes],
         'page_posts': [serialize_post(post) for post in fresh_posts],
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
     }
     return render(request, 'index.html', context)
-
 
 def post_detail(request, slug):
     post = Post.objects.get(slug=slug)
